@@ -22,17 +22,19 @@ import scipy.io as sio
 import h5py
 import matplotlib.pyplot as plt
 
-iter_num    = 0
-dim         = 2
-acq         = 'US_LW'
-n_init      = 3
-epochs      = 1000
-b_layers    = 8
-t_layers    = 1
-neurons     = 300
-init_method = 'pdf'
-N           = 2
-seed        = 3
+# Variables
+iter_num    = 0 # Iteration number
+dim         = 2 # Dimension of the stochastic excitation (infection rate)
+acq         = 'US_LW' # Acquisition type - currently only Likelihood-weighted uncertatiny sampling
+n_init      = 3 # Initial data points
+epochs      = 1000  # Number of training epochs
+b_layers    = 8 # Branch Layers
+t_layers    = 1 # Trunk Layers
+neurons     = 300 # Number of neurons per layer
+init_method = 'pdf'# How initial data are pulled
+N           = 8 # Number of DNO ensembles
+seed        = 3 # Seed for initial condition consistency - NOTE due to gradient descent of the DNO, the seed will not provide perfectly similar results, but will be analogous
+iters_max   = 100  # Iterations to perform
 
 def map_def(beta,gamma,delta,N,I0,T,dt,f):    
     S = np.zeros((int(T/dt),));
@@ -41,27 +43,34 @@ def map_def(beta,gamma,delta,N,I0,T,dt,f):
     I[0] = I0;
     R = np.zeros((int(T/dt),));
     for tt in range(0,np.size(S)-1):
-        # Equations of the model
+        # Ordinary different equations of the model
         dS = (-beta[tt]*I[tt]*S[tt] + delta*R[tt] - f[tt]) * dt;
         dI = (beta[tt]*I[tt]*S[tt] - gamma*I[tt] + f[tt]) * dt;
         dR = (gamma*I[tt] - delta*R[tt]) * dt;
+        # Simple integration
         S[tt+1] = S[tt] + dS;
         I[tt+1] = I[tt] + dI;
         R[tt+1] = R[tt] + dR;
     return I
 
 
-def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_method,N):
+def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_method,N,iters_max):
     
-    T = 75
-    dt = 0.2
-    gamma = 0.1
+    # T = 65
+    # dt = 0.2
+    # gamma = 0.1
+    # delta = 0
+    # N_people = 10**8
+    # I0 = 50
+    T = 45  
+    dt = 0.1
+    gamma = 0.25
     delta = 0
-    N_people = 10**8
+    N_people = 10*10**7
     I0 = 50
     
     ndim = dim
-    rank = dim
+    udim = dim # The dimensionality of the U components of Theta
     
     np.random.seed(seed)
     noise_var = 0
@@ -75,7 +84,7 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
     
     
     #Theta = inputs.draw_samples(50, "grd")
-    noise = Noise([0,1], sigma=0.1, ell=0.1)
+    noise = Noise([0,1], sigma=0.1, ell=1)
     
     # Need to determine U
     nsteps = int(T/dt)
@@ -86,10 +95,10 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
     coarse = 4
     
     # Create the X to U map, which is actually theta to U
-    multiplier = 2*10**-9 # Special for the map
+    multiplier = 3*10**-9 # Special for the map
     
     
-    def Theta_to_U(Theta,nsteps,coarse,rank):
+    def Theta_to_U(Theta,nsteps,coarse,udim):
         U1 = noise.get_sample(np.transpose(Theta))
         
         NN_grid = np.linspace(0,1,nsteps)
@@ -105,23 +114,23 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
         return U
     
     
-    def Theta_to_Z(Theta,rank):
-        if Theta.shape[1] == rank:
+    def Theta_to_Z(Theta,udim):
+        if Theta.shape[1] == udim:
             Z = np.ones((Theta.shape[0], 1))
         else:
-            Z = Theta[:,(2*rank):Theta.shape[1]]
+            Z = Theta[:,(udim+1):Theta.shape[1]]
         return Z         
     
     if iter_num == 0:
 
         # Determine the training data
         Y = np.zeros((n_init,))
-        Us = Theta_to_U(Theta,nsteps,1,2)+2.15
+        Us = Theta_to_U(Theta,nsteps,1,2)+2.55
         Us = Us*multiplier
     
         for i in range(0,n_init):
             I_temp = map_def(Us[i,:],gamma,delta,N_people,I0,T,dt, np.zeros(np.shape(Us[i,:])))
-            Y[i] = np.log10(I_temp[-1])/10 - 0.5
+            Y[i] = I_temp[-1]
     
         Y = Y.reshape(n_init,1)
     
@@ -143,73 +152,80 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
         use_bias=True,
         stacked=False,
     )
-    
     save_period = 1000
-    
-    model_dir = './'
-    save_str = 'coarse'+str(coarse)+'_InitMethod_'+init_method # This alters the string for the model saving
-     
-    
-    def Mean_Real(Mean_Val):
-        Real = 10**((Mean_Val+0.5)*10)
-        return Real
+         
+    # These functions are defined for normalizing, standardizing, or flatenining interal to DeepONet
 
-    # Now we loop through the iterations
-    iters_max = 10
-    # Keeping track of the objective function
-    py = np.zeros((10,10000))
+    def DNO_Y_transform(x):
+        x_transform = np.log10(x)/10 - 0.5
+        return x_transform
+
+    def DNO_Y_itransform(x_transform):
+        x = 10**((x_transform+0.5)*10)
+        return x
     
+    # Keeping track of the metric
+    pys = np.zeros((iters_max,10000))
     
+    # Loop through iterations
     for iter_num in range(0,iters_max):
         # Train the model
         np.random.seed(np.size(Y))
-        model_str = 'Rank'+str(np.shape(Theta)[1])+'_'+save_str+'_'+acq+'_Iter'+str(np.size(Y)-n_init+1)
+        model_dir = './'
         model_str = ''
-        model = DeepONet(Theta, nsteps, Theta_to_U, Theta_to_Z, Y, net, lr, epochs, N, model_dir, seed, save_period, model_str, coarse, rank, Mean_Real)
-    
+        model = DeepONet(Theta, nsteps, Theta_to_U, Theta_to_Z, Y, net, lr, epochs, N, model_dir, seed, save_period, model_str, coarse, udim, DNO_Y_transform, DNO_Y_itransform)
+        training_data = model.training() # Get the training/loss values from the learning process
+
+        # Pull a fine set of test_pts in the domain
         test_pts = 150
-        Thetanew = inputs.draw_samples(test_pts, "grd")
-        Mean_Val, Var_Val = model.predict(Thetanew)
-        #Real_Val = 10**((Mean_Val+0.5)*10)
-        Real_Val = Mean_Val
+        Theta_test = inputs.draw_samples(test_pts, "grd")
+        # Predict
+        Mean_Val, Var_Val = model.predict(Theta_test)
         
-        x_max = np.max(Real_Val)
-        x_min = np.min(Real_Val)
-        x_int = np.linspace(x_min,x_max,10000)
+        # Determine Bounds for evaluzting the metric
+        x_max = np.max(Mean_Val)
+        x_min = np.min(Mean_Val)
+        x_int = np.linspace(x_min,x_max,10000) # Linearly space points
+        x_int_standard = np.linspace(0,10**8,10000) # Static for pt-wise comparisons
+
+        # Create the weights/exploitation values
+        px = inputs.pdf(Theta_test)
+        sc = scipy.stats.gaussian_kde(Mean_Val.reshape(test_pts**2,), weights=px)   # Fit a guassian kde using px input weights
+        py = sc.evaluate(x_int) # Evaluate at x_int
+        py[py<10**-16] = 10**-16 # Eliminate spuriously small values (smaller than numerical precision)
+        py_standard = sc.evaluate(x_int_standard) # Evaluate for pt-wise comparisons
+        py_interp = InterpolatedUnivariateSpline(x_int, py, k=1) # Create interpolation function
         
-        fx = inputs.pdf(Thetanew)
-        sc = scipy.stats.gaussian_kde(Real_Val.reshape(test_pts**2,), weights=fx)
-        y = sc.evaluate(x_int)
-        y[y<10**-16] = 10**-16
-        fy_interp = InterpolatedUnivariateSpline(x_int, y, k=1)
-        wx = fx.reshape(test_pts**2,)/fy_interp(Real_Val).reshape(test_pts**2,)
+        # Conctruct the weights
+        wx = px.reshape(test_pts**2,)/py_interp(Mean_Val).reshape(test_pts**2,)
         wx = wx.reshape(test_pts**2,1)
         
+        # Compute the acquisition values
+        ax = wx*Var_Val  # This is simply w(\theta) \sigma^2(\theta) - note that x and \theta are used interchangably
+        
         # Find the optimal acquisition point
-        Theta_opt = Thetanew[np.argmax(wx*Var_Val),:]
+        Theta_opt = Theta_test[np.argmax(ax),:]
         Theta_opt = Theta_opt.reshape(1,2)        
         
-        # Calculate the U
-        U_opt = Theta_to_U(Theta_opt,nsteps,1,2)+2.15
+        # Calculate the associated U
+        U_opt = Theta_to_U(Theta_opt,nsteps,1,2)+2.55
         U_opt = U_opt*multiplier
         U_opt = U_opt.reshape(np.size(U_opt),1)
     
         # Pass to the Map
         I_temp = map_def(U_opt,gamma,delta,N_people,I0,T,dt,np.zeros(np.shape(U_opt)))
-        Y_opt = np.log10(I_temp[-1])/10 - 0.5
+        Y_opt = I_temp[-1]
         Y_opt = Y_opt.reshape(1,1)
     
         # Append the value for the next step
         Theta = np.append(Theta, Theta_opt, axis = 0)
         Y = np.append(Y, Y_opt, axis = 0)
-        training_data = model.training()
-        py[iter_num,:] = y
-    
-    
-    sio.savemat(str(N)+'.mat', {'Theta':Theta, 'U_opt':U_opt, 'I_temp':I_temp, 'wx':wx, 'y':y, 'x_int':x_int, 'Y':Y, 'Mean_Val':Mean_Val, 'Real_Val':Real_Val, 'Var_Val':Var_Val, 'n_init':n_init, 'N':N, 'seed':seed, 'Thetanew':Thetanew, 'training_data':training_data})
+        pys[iter_num,:] = py_standard
+        sio.savemat('SIR_Seed_'+str(seed)+'_N'+str(N)+'_iter_'+str(iter_num)+'.mat', {'pys':pys, 'x_int_standard':x_int_standard, 'Theta':Theta, 'U_opt':U_opt, 'I_temp':I_temp, 'wx':wx, 'ax':ax, 'py':py, 'x_int':x_int, 'Y':Y, 'Mean_Val':Mean_Val, 'Var_Val':Var_Val, 'n_init':n_init, 'N':N, 'seed':seed, 'Theta_test':Theta_test, 'training_data':training_data})
+
     return
 
 # Call the function
-main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_method,N)
+main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_method,N,iters_max)
 
 

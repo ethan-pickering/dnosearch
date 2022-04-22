@@ -46,12 +46,18 @@ class DeepONet(object):
         coarsens the input function note that m = nsteps/coarse
     rank : int
      	delineates the length of Theta_u
+    DNO_Y_transform: user defined functions
+        transforms Y to an appropriate scaling for DNO learning
+    DNO_Y_itransform: user defined functions
+        transforms learned scaling back to Y units 
+        
     Attributes
     ----------
-    Theta, nsteps, Theta_to_U, Theta_to_X, Y, net, lr, epochs, N, model_dir, seed, save_period, model_str, coarse, rank
+    Theta, nsteps, Theta_to_U, Theta_to_X, Y, net, lr, epochs, N, model_dir, seed, save_period, model_str, coarse, rank, DNO_Y_transform, DNO_Y_itransform
+        transforms Y to an appropriate scaling for DNO learning
     """
     
-    def __init__(self, Theta, nsteps, Theta_to_U, Theta_to_Z, Y, net, lr, epochs, N, model_dir, seed, save_period, model_str, coarse, rank, Mean_Real):
+    def __init__(self, Theta, nsteps, Theta_to_U, Theta_to_Z, Y, net, lr, epochs, N, model_dir, seed, save_period, model_str, coarse, rank, DNO_Y_transform, DNO_Y_itransform):
         
         self.net = net
         self.lr = lr
@@ -66,14 +72,14 @@ class DeepONet(object):
         self.coarse = coarse       
         self.Theta_to_U = Theta_to_U
         self.Theta_to_Z = Theta_to_Z   
-        self.Mean_Real = Mean_Real        
-
+        self.DNO_Y_transform = DNO_Y_transform     
+        self.DNO_Y_itransform = DNO_Y_itransform     
         self.Theta = Theta
         self.nsteps = nsteps 
         # Transform to U and Z values       
-        self.U = self.Theta_to_U(self.Theta, self.nsteps, self.coarse,self.rank)
+        self.U = self.Theta_to_U(self.Theta, self.nsteps, self.coarse, self.rank)
         self.Z = self.Theta_to_Z(self.Theta,self.rank)
-        self.Y = Y
+        self.Y = self.DNO_Y_transform(Y) 
         # Making Dummy Variable for testing since it is redundant right now
         self.Utest = self.U[0,:].reshape((1,np.size(self.U[0,:])))
         self.Ztest = self.Z[0,:].reshape((1,np.size(self.Z[0,:])))
@@ -135,7 +141,7 @@ class DeepONet(object):
     # A normalizing layer here would be able to take into account any transformations for learning the underlying functions
     def predict(self, Thetanew):
         prediction_vals = self.predict_all(Thetanew)
-        real_vals = self.Mean_Real(prediction_vals)
+        real_vals = self.DNO_Y_itransform(prediction_vals)
         mean_vals = np.mean(real_vals,axis = 1).reshape(np.shape(Thetanew)[0],1)
         var_vals = np.var(real_vals,axis = 1).reshape(np.shape(Thetanew)[0],1)
         
