@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri Mar 11 12:06:32 2022
-
+    Active learning via NNs of a 2D stochastic SIR Pandemic Model
 @author: ethanpickering
 """
 
@@ -58,12 +58,6 @@ def map_def(beta,gamma,delta,N,I0,T,dt,f):
 
 def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_method,N,iters_max):
     
-    # T = 65
-    # dt = 0.2
-    # gamma = 0.1
-    # delta = 0
-    # N_people = 10**8
-    # I0 = 50
     T = 45  
     dt = 0.1
     gamma = 0.25
@@ -84,11 +78,9 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
     if iter_num == 0:
         Theta = inputs.draw_samples(n_init, init_method)
     
-    
-    #Theta = inputs.draw_samples(50, "grd")
     noise = Noise([0,1], sigma=0.1, ell=1)
     
-    # Need to determine U
+    # Needed to determine U
     nsteps = int(T/dt)
     x_vals = np.linspace(0, 1, nsteps+1)
     x_vals = x_vals[0:-1]
@@ -170,7 +162,10 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
     pys = np.zeros((iters_max,10000))
     log10_errors = np.zeros((iters_max,))
     
+    ##########################################
     # Loop through iterations
+    ##########################################
+    
     for iter_num in range(0,iters_max):
         # Train the model
         np.random.seed(np.size(Y))
@@ -227,7 +222,7 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
         sio.savemat('SIR_Seed_'+str(seed)+'_N'+str(N)+'_iter_'+str(iter_num)+'.mat', {'pys':pys, 'x_int_standard':x_int_standard, 'Theta':Theta, 'U_opt':U_opt, 'I_temp':I_temp, 'wx':wx, 'ax':ax, 'py':py, 'x_int':x_int, 'Y':Y, 'Mean_Val':Mean_Val, 'Var_Val':Var_Val, 'n_init':n_init, 'N':N, 'seed':seed, 'Theta_test':Theta_test, 'training_data':training_data})
 
         if iter_num == 0: # Calulate the truth values
-            d = sio.loadmat('./truth_data.mat')
+            d = sio.loadmat('./truth_data_py.mat')
             py_standard_truth = d['py_standard']
             py_standard_truth = py_standard_truth.reshape(10000,)
         
@@ -257,7 +252,7 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
             plt.show()
 
         
-    sio.savemat('SIR_Errors_Seed_'+str(seed)+'_N'+str(N)+'.mat', {'log10_errors':log10_errors})
+    sio.savemat('./data/SIR_Errors_Seed_'+str(seed)+'_N'+str(N)+'.mat', {'log10_errors':log10_errors})
     return
 
 # Call the function
