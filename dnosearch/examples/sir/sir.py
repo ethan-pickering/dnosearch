@@ -8,7 +8,7 @@ Created on Fri Mar 11 12:06:32 2022
 
 # DNOSearch Imports
 import numpy as np
-from dnosearch import (BlackBox, GaussianInputs, DeepONet, Oscillator)
+from dnosearch import (BlackBox, GaussianInputs, DeepONet)
 from oscillator import Noise
 
 # DeepONet Imports
@@ -32,9 +32,11 @@ b_layers    = 8 # Branch Layers
 t_layers    = 1 # Trunk Layers
 neurons     = 300 # Number of neurons per layer
 init_method = 'pdf'# How initial data are pulled
-N           = 8 # Number of DNO ensembles
+N           = 2 # Number of DNO ensembles
 seed        = 3 # Seed for initial condition consistency - NOTE due to gradient descent of the DNO, the seed will not provide perfectly similar results, but will be analogous
-iters_max   = 100  # Iterations to perform
+iters_max   = 15  # Iterations to perform
+
+print_plots =True
 
 def map_def(beta,gamma,delta,N,I0,T,dt,f):    
     S = np.zeros((int(T/dt),));
@@ -166,6 +168,7 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
     
     # Keeping track of the metric
     pys = np.zeros((iters_max,10000))
+    log10_errors = np.zeros((iters_max,))
     
     # Loop through iterations
     for iter_num in range(0,iters_max):
@@ -177,7 +180,7 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
         training_data = model.training() # Get the training/loss values from the learning process
 
         # Pull a fine set of test_pts in the domain
-        test_pts = 150
+        test_pts = 75
         Theta_test = inputs.draw_samples(test_pts, "grd")
         # Predict
         Mean_Val, Var_Val = model.predict(Theta_test)
@@ -223,6 +226,38 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
         pys[iter_num,:] = py_standard
         sio.savemat('SIR_Seed_'+str(seed)+'_N'+str(N)+'_iter_'+str(iter_num)+'.mat', {'pys':pys, 'x_int_standard':x_int_standard, 'Theta':Theta, 'U_opt':U_opt, 'I_temp':I_temp, 'wx':wx, 'ax':ax, 'py':py, 'x_int':x_int, 'Y':Y, 'Mean_Val':Mean_Val, 'Var_Val':Var_Val, 'n_init':n_init, 'N':N, 'seed':seed, 'Theta_test':Theta_test, 'training_data':training_data})
 
+        if iter_num == 0: # Calulate the truth values
+            d = sio.loadmat('./truth_data.mat')
+            py_standard_truth = d['py_standard']
+            py_standard_truth = py_standard_truth.reshape(10000,)
+        
+        log10_error = np.sum(np.abs(np.log10(py_standard[50:2750]) - np.log10(py_standard_truth[50:2750])))*(x_int_standard[2] -x_int_standard[1])  
+        log10_errors[iter_num] = log10_error
+        print('The log-pdf error is: '+str(log10_error))
+        
+        if print_plots:
+            plt.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), Mean_Val.reshape(test_pts, test_pts))
+            plt.title('Mean')
+            plt.show()
+            plt.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), Var_Val.reshape(test_pts, test_pts))
+            plt.title('Variance')
+            plt.show()
+            plt.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), wx.reshape(test_pts, test_pts))
+            plt.title('Weights')
+            plt.show()
+            plt.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), ax.reshape(test_pts, test_pts))
+            plt.title('Acquisition')
+            plt.show()
+            plt.semilogy(x_int_standard, py_standard_truth)
+            plt.semilogy(x_int_standard, py_standard)
+            plt.xlim([0,2.75*10**7])
+            plt.ylim([10**-10,10**-6.75])
+            plt.legend('True', 'Approximate')
+            plt.title('Output PDFs')
+            plt.show()
+
+        
+    sio.savemat('SIR_Errors_Seed_'+str(seed)+'_N'+str(N)+'.mat', {'log10_errors':log10_errors})
     return
 
 # Call the function
