@@ -1,0 +1,2 @@
+model_checkpoint_path: "N1seed1_Rank2_coarse1_InitMethod_lhs_cdf_Iter1_model.ckpt-1000"
+all_model_checkpoint_paths: "N1seed1_Rank2_coarse1_InitMethod_lhs_cdf_Iter1_model.ckpt-1000"
