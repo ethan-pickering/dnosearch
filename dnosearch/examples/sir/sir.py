@@ -172,7 +172,6 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
         model_dir = './'
         model_str = ''
         model = DeepONet(Theta, nsteps, Theta_to_U, Theta_to_Z, Y, net, lr, epochs, N, model_dir, seed, save_period, model_str, coarse, udim, DNO_Y_transform, DNO_Y_itransform)
-        training_data = model.training() # Get the training/loss values from the learning process
 
         # Pull a fine set of test_pts in the domain
         test_pts = 75
@@ -219,7 +218,7 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
         Theta = np.append(Theta, Theta_opt, axis = 0)
         Y = np.append(Y, Y_opt, axis = 0)
         pys[iter_num,:] = py_standard
-        sio.savemat('SIR_Seed_'+str(seed)+'_N'+str(N)+'_iter_'+str(iter_num)+'.mat', {'pys':pys, 'x_int_standard':x_int_standard, 'Theta':Theta, 'U_opt':U_opt, 'I_temp':I_temp, 'wx':wx, 'ax':ax, 'py':py, 'x_int':x_int, 'Y':Y, 'Mean_Val':Mean_Val, 'Var_Val':Var_Val, 'n_init':n_init, 'N':N, 'seed':seed, 'Theta_test':Theta_test, 'training_data':training_data})
+        sio.savemat('SIR_Seed_'+str(seed)+'_N'+str(N)+'_iter_'+str(iter_num)+'.mat', {'pys':pys, 'x_int_standard':x_int_standard, 'Theta':Theta, 'U_opt':U_opt, 'I_temp':I_temp, 'wx':wx, 'ax':ax, 'py':py, 'x_int':x_int, 'Y':Y, 'Mean_Val':Mean_Val, 'Var_Val':Var_Val, 'n_init':n_init, 'N':N, 'seed':seed, 'Theta_test':Theta_test})
 
         if iter_num == 0: # Calulate the truth values
             d = sio.loadmat('./truth_data_py.mat')
@@ -235,12 +234,14 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
             plt.title('Mean')
             plt.show()
             plt.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), Var_Val.reshape(test_pts, test_pts))
+            plt.plot(Theta[0:np.size(Y),0], Theta[0:np.size(Y),1], 'wo')
             plt.title('Variance')
             plt.show()
             plt.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), wx.reshape(test_pts, test_pts))
             plt.title('Weights')
             plt.show()
             plt.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), ax.reshape(test_pts, test_pts))
+            plt.plot(Theta[-1,0], Theta[-1,1], 'ro')
             plt.title('Acquisition')
             plt.show()
             plt.semilogy(x_int_standard, py_standard_truth)
