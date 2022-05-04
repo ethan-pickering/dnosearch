@@ -8,7 +8,7 @@ Created on Fri Mar 11 12:06:32 2022
 
 # DNOSearch Imports
 import numpy as np
-from dnosearch import (BlackBox, GaussianInputs, DeepONet, Oscillator)
+from dnosearch import (BlackBox, GaussianInputs, DeepONet)
 from oscillator import Noise
 
 # DeepONet Imports
@@ -21,6 +21,10 @@ from scipy.interpolate import InterpolatedUnivariateSpline
 import scipy.io as sio
 import h5py
 import matplotlib.pyplot as plt
+plt.rcParams.update({
+    "text.usetex": False,
+    "font.family": "serif",
+    "font.serif": ["Times"]})
 
 # Variables
 iter_num    = int(sys.argv[2]) # Iteration number
@@ -33,6 +37,9 @@ t_layers    = int(sys.argv[8]) # Trunk Layers
 neurons     = int(sys.argv[9]) # Number of neurons per layer
 init_method = sys.argv[10] # How initial data are pulled
 N           = int(sys.argv[11])  # Number of DNO ensembles
+
+print('Print plots is set to True')
+print_plots  =True
 
 
 def map_def(beta,gamma,delta,N,I0,T,dt,f):    
@@ -53,7 +60,7 @@ def map_def(beta,gamma,delta,N,I0,T,dt,f):
     return I
 
 
-def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_method,N):
+def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_method,N,print_plots):
     # Seed above is for initial condition consistency - NOTE due to gradient descent of the DNO, the seed will not provide perfectly similar results, but will be analogous
     
     T = 45  
@@ -116,8 +123,8 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
         return Z         
     
     # Data Paths
-    save_path_data = 'SIR_Seed_'+str(seed)+'_N'+str(N)+'_iter_'+str(iter_num)+'.mat'
-    load_path_data = 'SIR_Seed_'+str(seed)+'_N'+str(N)+'_iter_'+str(iter_num-1)+'.mat'
+    save_path_data = './data/SIR_Seed_'+str(seed)+'_N'+str(N)+'_iter_'+str(iter_num)+'.mat'
+    load_path_data = './data/SIR_Seed_'+str(seed)+'_N'+str(N)+'_iter_'+str(iter_num-1)+'.mat'
 
     if iter_num == 0: # Willl compute data for first iteration
 
@@ -174,7 +181,6 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
     model_dir = './'
     model_str = ''
     model = DeepONet(Theta, nsteps, Theta_to_U, Theta_to_Z, Y, net, lr, epochs, N, model_dir, seed, save_period, model_str, coarse, udim, DNO_Y_transform, DNO_Y_itransform)
-    training_data = model.training() # Get the training/loss values from the learning process
 
     # Pull a fine set of test_pts in the domain
     test_pts = 150
@@ -220,9 +226,75 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
     # Append the value for the next step
     Theta = np.append(Theta, Theta_opt, axis = 0)
     Y = np.append(Y, Y_opt, axis = 0)
-    sio.savemat(save_path_data, {'py_standard':py_standard,'x_int_standard':x_int_standard, 'Theta':Theta, 'U_opt':U_opt, 'I_temp':I_temp, 'wx':wx, 'ax':ax, 'py':py, 'x_int':x_int, 'Y':Y, 'Mean_Val':Mean_Val, 'Var_Val':Var_Val, 'n_init':n_init, 'N':N, 'seed':seed, 'Theta_test':Theta_test, 'training_data':training_data})
+    
+    d = sio.loadmat('./truth_data_py.mat')
+    py_standard_truth = d['py_standard']
+    py_standard_truth = py_standard_truth.reshape(10000,)
+    log10_error = np.sum(np.abs(np.log10(py_standard[50:2750]) - np.log10(py_standard_truth[50:2750])))/(x_int_standard[2] -x_int_standard[1])  
+
+    
+    if print_plots:
+ 
+        fig = plt.figure()
+        gs = fig.add_gridspec(2, 3, hspace=0.15, wspace=0.3)
+        (ax1, ax2, ax3), (ax4, ax5, ax6) = gs.subplots()#(sharex='col', sharey='row')
+        fig.suptitle('2D Stochastic Pandemic Search, Iteration '+str(iter_num))
+        ax1.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), Mean_Val.reshape(test_pts, test_pts))
+        ax1.set_aspect('equal')
+        ax1.annotate('Mean Solution',
+        xy=(-3, 5), xycoords='data',
+        xytext=(0.7, 0.95), textcoords='axes fraction',
+        horizontalalignment='right', verticalalignment='top',color='white')
+        #ax1.set_ylabel('$\theta_2$') 
+        
+        ax2.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), Var_Val.reshape(test_pts, test_pts))
+        ax2.plot(Theta[0:np.size(Y)-1,0], Theta[0:np.size(Y)-1,1], 'wo')
+        ax2.set_aspect('equal')
+        ax2.annotate('Variance',
+        xy=(-3, 5), xycoords='data',
+        xytext=(0.7, 0.95), textcoords='axes fraction',
+        horizontalalignment='right', verticalalignment='top',color='white') 
+        
+        ax3.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), wx.reshape(test_pts, test_pts))
+        ax3.set_aspect('equal')
+        ax3.annotate('Danger Scores',
+        xy=(-3, 5), xycoords='data',
+        xytext=(0.7, 0.95), textcoords='axes fraction',
+        horizontalalignment='right', verticalalignment='top',color='white') 
+        #ax3.set_ylabel('$\theta_2$') 
+        #ax3.set_xlabel('$\theta_1$') 
+    
+        ax4.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), ax.reshape(test_pts, test_pts))
+        ax4.plot(Theta[-1,0], Theta[-1,1], 'ro')
+        ax4.set_aspect('equal')
+        ax4.annotate('Acquisition',
+        xy=(-3, 5), xycoords='data',
+        xytext=(0.7, 0.95), textcoords='axes fraction',
+        horizontalalignment='right', verticalalignment='top',color='white') 
+        #ax4.set_xlabel('$\theta_1$')
+        ax4.set_xlim([-6,6])
+        ax4.set_ylim([-6,6])
+    
+        ax5.semilogy(x_int_standard, py_standard_truth, label ='True PDF' )
+        ax5.semilogy(x_int_standard, py_standard, label='NN Approx.')
+        ax5.set_xlim([0,2.75*10**7])
+        ax5.set_ylim([10**-10,10**-6.75])
+        ax5.legend(loc='lower left')
+        #ax5.set_aspect('equal')
+        ax5.set_xlabel('New Infections')
+        
+        ax6.plot(iter_num,np.log10(log10_error), 'bo', label='Error')
+        #ax6.set_aspect('square')
+        ax6.legend(loc='lower left')
+        ax6.set_xlabel('Iterations')
+        plt.draw()
+        plt.savefig('./plots/SIR_Seed_'+str(seed)+'Iteration'+str(iter_num)+'.jpg', dpi=150)
+    
+    sio.savemat(save_path_data, {'py_standard':py_standard,'x_int_standard':x_int_standard, 'Theta':Theta, 'U_opt':U_opt, 
+                                 'I_temp':I_temp, 'wx':wx, 'ax':ax, 'py':py, 'x_int':x_int, 'Y':Y, 'Mean_Val':Mean_Val, 
+                                 'Var_Val':Var_Val, 'n_init':n_init, 'N':N, 'seed':seed, 'Theta_test':Theta_test, 'log10_error':log10_error})
 
 
 if __name__ == "__main__":
-    main(int(sys.argv[1]),iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_method,N)
+    main(int(sys.argv[1]),iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_method,N,print_plots)
 

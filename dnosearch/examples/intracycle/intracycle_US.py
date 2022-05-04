@@ -126,7 +126,6 @@ net = dde.maps.OpNN(
     stacked=False,
 )
 
-M = 1 # Number of snapshot ensembles
 save_period = 1000
 
 model_dir = './model/'

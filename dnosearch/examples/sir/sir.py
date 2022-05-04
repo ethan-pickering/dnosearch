@@ -21,6 +21,10 @@ from scipy.interpolate import InterpolatedUnivariateSpline
 import scipy.io as sio
 import h5py
 import matplotlib.pyplot as plt
+plt.rcParams.update({
+    "text.usetex": False,
+    "font.family": "serif",
+    "font.serif": ["Times"]})
 
 # Variables
 iter_num    = 0 # Iteration number
@@ -225,34 +229,72 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
             py_standard_truth = d['py_standard']
             py_standard_truth = py_standard_truth.reshape(10000,)
         
-        log10_error = np.sum(np.abs(np.log10(py_standard[50:2750]) - np.log10(py_standard_truth[50:2750])))*(x_int_standard[2] -x_int_standard[1])  
+        log10_error = np.sum(np.abs(np.log10(py_standard[50:2750]) - np.log10(py_standard_truth[50:2750])))/(x_int_standard[2] -x_int_standard[1])  
         log10_errors[iter_num] = log10_error
-        print('The log-pdf error is: '+str(log10_error))
+        print('The log10 of the log-pdf error is: '+str(np.log10(log10_error)))
         
         if print_plots:
-            plt.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), Mean_Val.reshape(test_pts, test_pts))
-            plt.title('Mean')
-            plt.show()
-            plt.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), Var_Val.reshape(test_pts, test_pts))
-            plt.plot(Theta[0:np.size(Y),0], Theta[0:np.size(Y),1], 'wo')
-            plt.title('Variance')
-            plt.show()
-            plt.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), wx.reshape(test_pts, test_pts))
-            plt.title('Weights')
-            plt.show()
-            plt.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), ax.reshape(test_pts, test_pts))
-            plt.plot(Theta[-1,0], Theta[-1,1], 'ro')
-            plt.title('Acquisition')
-            plt.show()
-            plt.semilogy(x_int_standard, py_standard_truth)
-            plt.semilogy(x_int_standard, py_standard)
-            plt.xlim([0,2.75*10**7])
-            plt.ylim([10**-10,10**-6.75])
-            plt.legend('True', 'Approximate')
-            plt.title('Output PDFs')
-            plt.show()
+         
+            fig = plt.figure()
+            gs = fig.add_gridspec(2, 3, hspace=0.15, wspace=0.3)
+            (ax1, ax2, ax3), (ax4, ax5, ax6) = gs.subplots()#(sharex='col', sharey='row')
+            fig.suptitle('2D Stochastic Pandemic Search, Iteration '+str(iter_num))
+            ax1.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), Mean_Val.reshape(test_pts, test_pts))
+            ax1.set_aspect('equal')
+            ax1.annotate('Mean Solution',
+            xy=(-3, 5), xycoords='data',
+            xytext=(0.7, 0.95), textcoords='axes fraction',
+            horizontalalignment='right', verticalalignment='top',color='white')
+            #ax1.set_ylabel('$\theta_2$') 
+            
+            ax2.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), Var_Val.reshape(test_pts, test_pts))
+            ax2.plot(Theta[0:np.size(Y)-1,0], Theta[0:np.size(Y)-1,1], 'wo')
+            ax2.set_aspect('equal')
+            ax2.annotate('Variance',
+            xy=(-3, 5), xycoords='data',
+            xytext=(0.7, 0.95), textcoords='axes fraction',
+            horizontalalignment='right', verticalalignment='top',color='white') 
+            
+            ax3.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), wx.reshape(test_pts, test_pts))
+            ax3.set_aspect('equal')
+            ax3.annotate('Danger Scores',
+            xy=(-3, 5), xycoords='data',
+            xytext=(0.7, 0.95), textcoords='axes fraction',
+            horizontalalignment='right', verticalalignment='top',color='white') 
+            #ax3.set_ylabel('$\theta_2$') 
+            #ax3.set_xlabel('$\theta_1$') 
 
-        
+            ax4.pcolor(Theta_test[:,0].reshape(test_pts, test_pts), Theta_test[:,1].reshape(test_pts, test_pts), ax.reshape(test_pts, test_pts))
+            ax4.plot(Theta[-1,0], Theta[-1,1], 'ro')
+            ax4.set_aspect('equal')
+            ax4.annotate('Acquisition',
+            xy=(-3, 5), xycoords='data',
+            xytext=(0.7, 0.95), textcoords='axes fraction',
+            horizontalalignment='right', verticalalignment='top',color='white') 
+            #ax4.set_xlabel('$\theta_1$')
+            ax4.set_xlim([-6,6])
+            ax4.set_ylim([-6,6])
+
+            ax5.semilogy(x_int_standard, py_standard_truth, label ='True PDF' )
+            ax5.semilogy(x_int_standard, py_standard, label='NN Approx.')
+            ax5.set_xlim([0,2.75*10**7])
+            ax5.set_ylim([10**-10,10**-6.75])
+            ax5.legend(loc='lower left')
+            #ax5.annotate('Output PDFs',
+            #xy=(-3, 5), xycoords='data',
+            #xytext=(0.7, 0.95), textcoords='axes fraction',
+            #horizontalalignment='right', verticalalignment='top',color='white') 
+            ax5.set_xlabel('New Infections')
+            
+            ax6.plot(np.linspace(0,iter_num,iter_num+1),np.log10(log10_errors[0:iter_num+1]), label='Error')
+            #ax6.annotate('Log10 of log-pdf Error',
+            #xy=(-3, 5), xycoords='data',
+            #xytext=(0.7, 0.95), textcoords='axes fraction',
+            #horizontalalignment='right', verticalalignment='top',color='white')
+            ax6.legend(loc='lower left')
+            ax6.set_xlabel('Iterations')
+            plt.show()
+                    
     sio.savemat('./data/SIR_Errors_Seed_'+str(seed)+'_N'+str(N)+'.mat', {'log10_errors':log10_errors})
     return
 
