@@ -51,7 +51,7 @@ print_plots =True
 # of the last point in the input signal
 
 def map_def(U):    
-    y = U[:,-1]**4
+    y = U[:,-1]**10
     return y
 
 def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_method,N,iters_max,print_plots):
@@ -59,7 +59,6 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
     
     ndim = dim
     udim = ndim # The dimensionality of the U components of Theta
-    mean, cov = np.zeros(ndim), np.ones(ndim)
     domain = [ [0, 2*np.pi] ] * ndim
     
     inputs = UniformInputs(domain)
@@ -90,6 +89,20 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
                 U[j,:] = U[j,:] + np.sin(wavenumber*(x+phi_0+Theta[j,i]))            
         return U
     
+   # U = f(Theta); U is your control function/law
+   # u_i = a_i sin(2pit+phi) 
+   
+   # Theta = [a_1, phi_1, a_2, phi_2 ..., ]
+   # Theta = [a_1, a_2, ..., phi_1, phi_2]
+   
+   # U = [u_1; u_2; ...] 
+   
+    
+   # G(U(x)) = int( u(x)^2) dx
+   # G(U(x)) = int( u(x)^1) dx
+   # G(U(x)) = int( u(x)^3) dx
+   # G(U(x)) = int( u(x)^z) dx
+
     
     def Theta_to_Z(Theta,rank):
         if Theta.shape[1] == rank:
@@ -126,16 +139,15 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
     # These functions are defined for normalizing, standardizing, or flatenining interal to DeepONet
 
     def DNO_Y_transform(x):
-        x_transform = x/16
+        x_transform = x/1024
         return x_transform
 
     def DNO_Y_itransform(x_transform):
-        x = x_transform*16
+        x = x_transform*1024
         return x
     
     # Keeping track of the metric
     pys = np.zeros((iters_max,10000))
-    log10_errors = np.zeros((iters_max,))
     
     ##########################################
     # Loop through iterations
@@ -158,7 +170,7 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
         x_max = np.max(Mean_Val)
         x_min = np.min(Mean_Val)
         x_int = np.linspace(x_min,x_max,100) # Linearly space points
-        x_int_standard = np.linspace(0,4,100) # Static for pt-wise comparisons
+        x_int_standard = np.linspace(0,1024,100) # Static for pt-wise comparisons
 
         # Create the weights/exploitation values
         px = inputs.pdf(Theta_test)
@@ -175,8 +187,10 @@ def main(seed,iter_num,dim,acq,n_init,epochs,b_layers,t_layers,neurons,init_meth
         # Compute the acquisition values
         
         if acq == 'LCB_LW':
-            kappa = 1
-            ax = Mean_Val + kappa * wx * (Var_Val)**(1/2)
+            kappa = np.max(Mean_Val) / np.max(wx*(Var_Val)**(1/2))
+            kappa2 = 1
+            ax = Mean_Val + kappa * wx * (Var_Val)**(1/2) * kappa2 
+
         elif acq == 'US_LW':
             ax = wx*Var_Val  # This is simply w(\theta) \sigma^2(\theta) - note that x and \theta are used interchangably
         
