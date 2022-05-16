@@ -1,7 +1,7 @@
 # This shell script currently performs 1 experiement (seed 1) of all models for the 2D case.
 # The script may be changed for additional experiments (seeds 2-10, etc) and the 4D, 6D, and 8D cases.
 # CRITICAL DIFFERENCE: here we choose N=2 while the paper uses N=10, this can easily be changed below to replicate the paper, but as we show, why make life 5 times as hard?!
-
+# MATLAB NOTE, ensure the path to MATLAB is correct for your system
 
 seed_start=1 # The start and end values give the number of experiments, these will run in parallel if seed_end>seed_start
 seed_end=1
@@ -19,10 +19,10 @@ init_method='lhs'
 model='DON' # Deep O Net
 objective='MaxAbsRe' #'MaxAbsRe'
 N=2 # Number of ensembles 
-iters_max=2
+iters_max=100
 # Currently written to parallize seeds (i.e. independent runs)
 
-for iter_num in {0..$iters_max}
+for iter_num in $(seq 0 $iters_max)
 do
   for ((seed=$seed_start;seed<=$seed_end;seed++))
   do
@@ -37,7 +37,7 @@ do
 done
 
 acq='US'
-for iter_num in {0..$iters_max}
+for iter_num in $(seq 0 $iters_max)
 do
   for ((seed=$seed_start;seed<=$seed_end;seed++))
   do
@@ -52,7 +52,7 @@ do
 done
 
 acq='lhs'
-for iter_num in {0..$iters_max}
+for iter_num in $(seq 0 $iters_max)
 do
   for ((seed=$seed_start;seed<=$seed_end;seed++))
   do
@@ -68,7 +68,7 @@ done
 
 acq='US'
 model='GP'
-for iter_num in {0..$iters_max}
+for iter_num in $(seq 0 $iters_max)
 do
   for ((seed=$seed_start;seed<=$seed_end;seed++))
   do
@@ -84,7 +84,7 @@ done
 
 acq='US_LW'
 model='GP'
-for iter_num in {0..$iters_max}
+for iter_num in $(seq 0 $iters_max)
 do
   for ((seed=$seed_start;seed<=$seed_end;seed++))
   do
@@ -100,7 +100,7 @@ done
 
 acq='lhs'
 model='GP'
-for iter_num in {0..$iters_max}
+for iter_num in $(seq 0 $iters_max)
 do
   for ((seed=$seed_start;seed<=$seed_end;seed++))
   do

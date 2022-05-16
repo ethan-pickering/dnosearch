@@ -9,7 +9,7 @@ Performing a GP search of the MMT Model of the Nonlinear Schrodinger Equation
 
 # DNOSearch Imports
 import numpy as np
-from dnosearch import (BlackBox, GaussianInputs, DeepONet, Oscillator)
+from dnosearch import (BlackBox, GaussianInputs, DeepONet)
 from oscillator import Noise
 import deepxde as dde
 
@@ -329,7 +329,7 @@ def main(seed,iter_num,rank,acq,lam,batch_size,n_init,epochs,b_layers,t_layers,n
         py[py<10**-16] = 10**-16 # Eliminate spuriously small values (smaller than numerical precision)
 
         print('Saving PDF only, for lite saving.')
-        sio.savemat(save_path_data, {'x_int':x_int, 'py':py})
+        sio.savemat(save_path_data, {'x_int':x_int, 'py':py,'Theta':Theta, 'Y':Y, 'Mean_Val':Mean_Val, 'Var_Val':Var_Val})
 
         # Below is a heavier save to track all of the variables
         #sio.savemat(save_path_data, {'Theta':Theta, 'Y':Y, 'Mean_Val':Mean_Val, 'Var_Val':Var_Val, 'US_LW_Val':US_LW_Val, 'n_init':n_init, 'N':N, 'seed':seed, 'Theta_valid':Theta_valid, 
