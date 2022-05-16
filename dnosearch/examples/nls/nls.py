@@ -130,7 +130,6 @@ def main(seed,iter_num,rank,acq,lam,batch_size,n_init,epochs,b_layers,t_layers,n
         
         
         
-        
         validation_file = './IC/Rank'+str(rank)+'_Xs1.mat'
         # Get previous iteration data
         save_path_data_prev     = './results/Rank'+str(rank)+'_'+model+'_'+acq+'_Seed'+str(seed)+'_N'+str(N)+'_Iteration'+str(iter_num-1)+'.mat'
@@ -164,8 +163,6 @@ def main(seed,iter_num,rank,acq,lam,batch_size,n_init,epochs,b_layers,t_layers,n
             print(np.shape(Y))
     
         np.random.seed(np.size(Y))
-            
-    
     
         m       = int(nsteps/coarse*2) #604*2
         lr      = 0.001
@@ -202,12 +199,13 @@ def main(seed,iter_num,rank,acq,lam,batch_size,n_init,epochs,b_layers,t_layers,n
         model_dir = './'
         model_str = ''
         model = DeepONet(Theta, nsteps, Theta_to_U, Theta_to_Z, Y, net, lr, epochs, N, model_dir, seed, save_period, model_str, coarse, rank, DNO_Y_transform, DNO_Y_itransform)
-        training_data = model.training() # Get the training/loss values from the learning process
+        #training_data = model.training() # Get the training/loss values from the learning process
     
     
         # Create acquisition function and batch new points for acquisition        
         if ndim > 5:
-            n_monte = 10**7
+            n_monte = 10**5
+            print('Note that n_monte is set to 10^5 for memory limits on standard computers, but 10^7 was used for larger dimensions, results may be slightly impacted by this coarser representation')
             #n_end   = 10**4
         else:
             n_monte = 10**(ndim+2)
@@ -223,7 +221,7 @@ def main(seed,iter_num,rank,acq,lam,batch_size,n_init,epochs,b_layers,t_layers,n
             x_max = np.max(Mean_Val)
             x_min = np.min(Mean_Val)
             x_int = np.linspace(x_min,x_max,10000) # Linearly space points
-            x_int_standard = np.linspace(0,10**8,10000) # Static for pt-wise comparisons
+            x_int_standard = np.linspace(0,1,10000) # Static for pt-wise comparisons
         
             # Create the weights/exploitation values
             px = inputs.pdf(Theta_test)
@@ -292,6 +290,7 @@ def main(seed,iter_num,rank,acq,lam,batch_size,n_init,epochs,b_layers,t_layers,n
         Theta_valid = d['Xs']        
         batches = 1 # This is useful if the test data is very large and iterative computation saves memory
         n_samples = np.shape(Theta_valid)[0] #10**5
+        
         batch_size = n_samples / batches
 
         Mean_Val = np.zeros((n_samples,1))
@@ -313,18 +312,24 @@ def main(seed,iter_num,rank,acq,lam,batch_size,n_init,epochs,b_layers,t_layers,n
             Training_US_LW_Val = inputs.pdf(Theta).reshape(n_Y,)/py_interp(Training_Mean_Val).reshape(n_Y,) * Training_Var_Val.reshape(n_Y,)
             Opt_US_LW_Val = inputs.pdf(theta_opt).reshape(n_guess,)/py_interp(Opt_Mean_Val).reshape(n_guess,) * Opt_Var_Val.reshape(n_guess,)
             
-        elif acq == 'US':
-            US_LW_Val = Var_Val
-            Training_US_LW_Val = Opt_Var_Val 
-            Opt_US_LW_Val = Training_Var_Val
 
-        training_data = model.training()
-        sio.savemat(save_path_data, {'Theta':Theta, 'Y':Y, 'Mean_Val':Mean_Val, 'Var_Val':Var_Val, 'US_LW_Val':US_LW_Val, 'n_init':n_init, 'N':N, 'seed':seed, 'Theta_valid':Theta_valid, 'training_data':training_data, 
-                                          'Training_Mean_Val':Training_Mean_Val, 'Training_Var_Val':Training_Var_Val, 'Training_US_LW_Val':Training_US_LW_Val, 'Opt_Mean_Val':Opt_Mean_Val, 'Opt_Var_Val':Opt_Var_Val, 'Opt_US_LW_Val':Opt_US_LW_Val})
+        #training_data = model.training()
+        
+        # Calculate the approximated PDF for Validation points 
+        x_int = np.linspace(0,1,1000) # Static for pt-wise comparisons
+        px = inputs.pdf(Theta_valid)
+        sc = scipy.stats.gaussian_kde(Mean_Val.reshape(n_samples,), weights=px)   # Fit a guassian kde using px input weights
+        py = sc.evaluate(x_int) # Evaluate at x_int
+        py[py<10**-16] = 10**-16 # Eliminate spuriously small values (smaller than numerical precision)
 
+        print('Saving PDF only, for lite saving.')
+        sio.savemat(save_path_data, {'x_int':x_int, 'py':py})
+
+        # Below is a heavier save to track all of the variables
+        #sio.savemat(save_path_data, {'Theta':Theta, 'Y':Y, 'Mean_Val':Mean_Val, 'Var_Val':Var_Val, 'US_LW_Val':US_LW_Val, 'n_init':n_init, 'N':N, 'seed':seed, 'Theta_valid':Theta_valid, 
+        #                                  'Training_Mean_Val':Training_Mean_Val, 'Training_Var_Val':Training_Var_Val, 'Training_US_LW_Val':Training_US_LW_Val, 'Opt_Mean_Val':Opt_Mean_Val, 'Opt_Var_Val':Opt_Var_Val, 'Opt_US_LW_Val':Opt_US_LW_Val})
 
     return
-
 
 
 if __name__ == "__main__":
