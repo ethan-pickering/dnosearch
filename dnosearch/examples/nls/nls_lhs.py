@@ -80,7 +80,7 @@ def main(seed,iter_num,rank,acq,lam,batch_size,n_init,epochs,b_layers,t_layers,n
     domain = [ [-6, 6] ] * ndim
     inputs = GaussianInputs(domain, mean, cov)
     np.random.seed(seed)
-    Theta_total = inputs.draw_samples(n_init+iters_max, init_method)
+    Theta_total = inputs.draw_samples(n_init+iters_max*batch_size, init_method)
 
     if iter_num == 0:
 
@@ -93,7 +93,7 @@ def main(seed,iter_num,rank,acq,lam,batch_size,n_init,epochs,b_layers,t_layers,n
         for i in range(0,n_init):
             y0[:,i] = Save_U(Theta[i,:],nsteps,rank).reshape(nsteps,)
             # Save the y0 file to run with matlab
-        sio.savemat(save_y0_file, {'y0':y0})        
+        sio.savemat(save_y0_file, {'y0':y0, 'Theta':Theta})        
     else:
         ndim = rank*2
         np.random.seed(seed)
@@ -142,8 +142,10 @@ def main(seed,iter_num,rank,acq,lam,batch_size,n_init,epochs,b_layers,t_layers,n
         
         validation_file = './IC/Rank'+str(rank)+'_Xs1.mat'
         # Get previous iteration data
-        save_path_data_prev     = './results/Rank'+str(rank)+'_'+model+'_'+acq+'_Seed'+str(seed)+'_N'+str(N)+'_Iteration'+str(iter_num-1)+'.mat'
-        save_path_data          = './results/Rank'+str(rank)+'_'+model+'_'+acq+'_Seed'+str(seed)+'_N'+str(N)+'_Iteration'+str(iter_num)+'.mat'
+#        save_path_data_prev     = './results/Rank'+str(rank)+'_'+model+'_'+acq+'_Seed'+str(seed)+'_N'+str(N)+'_Iteration'+str(iter_num-1)+'.mat'
+#        save_path_data          = './results/Rank'+str(rank)+'_'+model+'_'+acq+'_Seed'+str(seed)+'_N'+str(N)+'_Iteration'+str(iter_num)+'.mat'
+        save_path_data_prev     = './results/Rank'+str(rank)+'_'+model+'_'+acq+'_Seed'+str(seed)+'_N'+str(N)+'_Batch_'+str(batch_size)+'_Init_'+init_method+'_Iteration'+str(iter_num-1)+'.mat'
+        save_path_data          = './results/Rank'+str(rank)+'_'+model+'_'+acq+'_Seed'+str(seed)+'_N'+str(N)+'_Batch_'+str(batch_size)+'_Init_'+init_method+'_Iteration'+str(iter_num)+'.mat'
 
         save_y0_file = './IC/Rank'+str(rank)+'_'+model+'_Seed'+str(seed)+'_Acq'+acq+'_Iter'+str(iter_num)+'_Lam'+str(lam)+'_BatchSize'+str(batch_size)+'_N'+str(N)+'_savedata_y0.mat'
         load_Y_file  = './IC/Rank'+str(rank)+'_'+model+'_Seed'+str(seed)+'_Acq'+acq+'_Iter'+str(iter_num-1)+'_Lam'+str(lam)+'_BatchSize'+str(batch_size)+'_N'+str(N)+'_savedata_Y.mat' 
@@ -151,7 +153,8 @@ def main(seed,iter_num,rank,acq,lam,batch_size,n_init,epochs,b_layers,t_layers,n
 
 
         if iter_num == 1:
-            Theta = inputs.draw_samples(n_init, init_method)
+            d = sio.loadmat(save_y0_file_prev)
+            Theta = d['Theta']            
             d = sio.loadmat(load_Y_file)
             Y = d['Y']
             print(np.shape(Y)) 
@@ -207,12 +210,12 @@ def main(seed,iter_num,rank,acq,lam,batch_size,n_init,epochs,b_layers,t_layers,n
         
         # Where to save the DeepONet models
         model_dir = './'
-        model_str = ''
+        model_str = 'Rank'+str(rank)+'_'+model+'_'+acq+'_Seed'+str(seed)+'_N'+str(N)+'_Batch_'+str(batch_size)+'_Init_'+init_method
         model = DeepONet(Theta, nsteps, Theta_to_U, Theta_to_Z, Y, net, lr, epochs, N, model_dir, seed, save_period, model_str, coarse, rank, DNO_Y_transform, DNO_Y_itransform)
         #training_data = model.training() # Get the training/loss values from the learning process
     
         # The optimal value is simply chosen from the next LHS point.
-        theta_opt = Theta_total[n_init+iter_num-1,:]
+        theta_opt = Theta_total[(n_init+(iter_num-1)*batch_size):(n_init+(iter_num)*batch_size),:]
         theta_opt = np.atleast_2d(theta_opt)
         
         # Here we need to save the optimized value now such that it can be passed to the matlab function
@@ -229,17 +232,19 @@ def main(seed,iter_num,rank,acq,lam,batch_size,n_init,epochs,b_layers,t_layers,n
         Theta_valid = d['Xs']        
         batches = 1 # This is useful if the test data is very large and iterative computation saves memory
         n_samples = np.shape(Theta_valid)[0] #10**5
+        comp_batches = 1
         
-        batch_size = n_samples / batches
+        comp_batch_size = n_samples / comp_batches # Note this is different than the ''batch_size'' for new acquisition points
 
         Mean_Val = np.zeros((n_samples,1))
         Var_Val = np.zeros((n_samples,1))
         US_LW_Val = np.zeros((n_samples,1))
-        
-        for batch in range(0,batches):
+
+        for batch in range(0,comp_batches):
             # Direct computation
-            inds = np.linspace(batch*batch_size, (batch_size*(batch+1))-1, int(batch_size)).astype(int)
+            inds = np.linspace(batch*comp_batch_size, (comp_batch_size*(batch+1))-1, int(comp_batch_size)).astype(int)
             Mean_Val[inds,:], Var_Val[inds,:] = model.predict(Theta_valid[inds,:])
+
         
         Opt_Mean_Val, Opt_Var_Val = model.predict(theta_opt)
         Training_Mean_Val, Training_Var_Val = model.predict(Theta)
@@ -253,8 +258,10 @@ def main(seed,iter_num,rank,acq,lam,batch_size,n_init,epochs,b_layers,t_layers,n
         py[py<10**-16] = 10**-16 # Eliminate spuriously small values (smaller than numerical precision)
 
         print('Saving PDF only, for lite saving.')
-        sio.savemat(save_path_data, {'x_int':x_int, 'py':py,'Theta':Theta, 'Y':Y, 'Mean_Val':Mean_Val, 'Var_Val':Var_Val})
-
+        if rank == 1:
+            sio.savemat(save_path_data, {'x_int':x_int, 'py':py,'Theta':Theta, 'Y':Y, 'Mean_Val':Mean_Val, 'Var_Val':Var_Val})
+        else:
+            sio.savemat(save_path_data, {'x_int':x_int, 'py':py,'Theta':Theta, 'Y':Y})
         # Below is a heavier save to track all of the variables
         #sio.savemat(save_path_data, {'Theta':Theta, 'Y':Y, 'Mean_Val':Mean_Val, 'Var_Val':Var_Val, 'US_LW_Val':US_LW_Val, 'n_init':n_init, 'N':N, 'seed':seed, 'Theta_valid':Theta_valid, 
         #                                  'Training_Mean_Val':Training_Mean_Val, 'Training_Var_Val':Training_Var_Val, 'Training_US_LW_Val':Training_US_LW_Val, 'Opt_Mean_Val':Opt_Mean_Val, 'Opt_Var_Val':Opt_Var_Val, 'Opt_US_LW_Val':Opt_US_LW_Val})
