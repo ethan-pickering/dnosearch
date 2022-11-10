@@ -1,0 +1,72 @@
+function [ outcode ] = compare_wavegroup_histograms( cur_protocol )
+%COMPARE_WAVEGROUP_HISTOGRAMS Summary of this function goes here
+%   Detailed explanation goes here
+
+    a_par = cur_protocol.a_par;
+
+    n_recoveries = size(cur_protocol.aa_test, 1);
+
+    XX_raw = cell(n_recoveries, 1);
+    XX_cooked = cell(n_recoveries, 1);
+    
+    V_out = cur_protocol.gpr_obj.V_out;
+    lambda = cur_protocol.gpr_obj.D_out; %rescale by KL eigenweights
+    ts_mu = cur_protocol.gpr_obj.ts_mu;
+    beta = cur_protocol.gpr_obj.overall_norm_factor;
+    
+    for k = 1:n_recoveries
+        qq = cur_protocol.gpr_obj.predict(cur_protocol.aa_test(k, :));
+        XX_cooked{k} = ts_transform_kl( a_par, qq, V_out, lambda, ts_mu )*...
+            beta;
+    
+        XX_raw{k} = cur_protocol.zz_test(:, k)*beta;
+    end
+
+    b_max = 4*beta;
+    bb = linspace(-b_max, b_max, 17);
+    bb_cen = (bb(2:end) + bb(1:end-1))/2;
+
+    NN_raw = cell(n_recoveries, 1);
+    NN_cooked = cell(n_recoveries, 1);
+
+    for k = 1:n_recoveries
+        NN_raw{k} = histcounts(XX_raw{k}, bb, 'Normalization','pdf');
+        NN_cooked{k} = histcounts(XX_cooked{k}, bb, 'Normalization', 'pdf');
+    end
+
+
+    figure(205);
+    clf;
+    for k = 1:min(n_recoveries, 9)
+        subplot(3, 3, k);
+        hold on
+        plot(bb_cen, NN_raw{k});
+        plot(bb_cen, NN_cooked{k});
+
+        title(sprintf('wave %d', 400 + k), 'Interpreter', 'Latex');
+
+        if k == 1
+            legend({'openFOAM', 'reconstruct'}, 'Interpreter', 'Latex');
+        end
+        xlim([bb(1), bb(end)]);
+
+        set(gca, 'FontSize', 9);
+        %set(gca, 'YScale', 'log'); too little data
+
+        aa = gca;
+        set(gca, 'XTickLabel', aa.XTickLabel())
+        set(gca, 'YTickLabel', aa.YTickLabel())
+    end
+
+    set(gcf,'units','inches','position', a_par.plot_pos);
+    set(gcf,'PaperUnits', 'inches', 'PaperPosition', a_par.full_paper_pos, 'PaperSize', a_par.full_paper_size);
+
+    if a_par.save_figs
+        filename = sprintf('%swavegroup-histograms_%s', a_par.fig_path, cur_protocol.exp_name);
+        print(filename,'-dpdf');
+        savefig(filename);
+    end
+
+    outcode = 1;
+end
+

@@ -12,7 +12,8 @@ import numpy as np
 from dnosearch import (BlackBox, GaussianInputs, DeepONet)
 from oscillator import Noise
 import deepxde as dde
-
+from KDEpy import FFTKDE
+ 
 # NLS Import
 from complex_noise import Noise_MMT
 
@@ -230,7 +231,12 @@ def main(seed,iter_num,rank,acq,lam,batch_size,n_init,epochs,b_layers,t_layers,n
         
             # Create the weights/exploitation values
             px = inputs.pdf(Theta_test)
-            sc = scipy.stats.gaussian_kde(Mean_Val.reshape(n_monte,), weights=px)   # Fit a guassian kde using px input weights
+            if rank  > 9:
+                bw = 0.035
+                sc = FFTKDE(bw=bw).fit(Mean_Val.reshape(n_monte,), px)  # Special bandwith for high dimensional problems.
+            else:
+                sc = scipy.stats.gaussian_kde(Mean_Val.reshape(n_monte,), weights=px)   # Fit a guassian kde using px input weights
+                
             py = sc.evaluate(x_int) # Evaluate at x_int
             py[py<10**-16] = 10**-16 # Eliminate spuriously small values (smaller than numerical precision)
             py_standard = sc.evaluate(x_int_standard) # Evaluate for pt-wise comparisons

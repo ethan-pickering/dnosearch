@@ -1,0 +1,2 @@
+model_checkpoint_path: "N0seed1__r0_model.ckpt-1000"
+all_model_checkpoint_paths: "N0seed1__r0_model.ckpt-1000"
